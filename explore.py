@@ -39,6 +39,7 @@ import seaborn as sns
 from sklearn.covariance import EllipticEnvelope
 from sklearn.decomposition import PCA
 from sklearn.metrics import normalized_mutual_info_score
+from sklearn.preprocessing import LabelEncoder
 
 import feature_extractor
 
@@ -128,15 +129,29 @@ plt.show()
 # +
 # How well can we recover photo labels using an unsupervised algoritm?
 # Try to cluster everything into 5 clusters and then compute NMI score between known clusering of photos by labels.
-clustering_model = AgglomerativeClustering(n_clusters=5).fit(features_array)
-clustering_model.predict(features_array)
-#print(clustering_model)
+true_labels = LabelEncoder().fit_transform(photos_with_features_df.label)
+print(true_labels)
+
+clustering_result = AgglomerativeClustering(n_clusters=5).fit_predict(features_array)
+print(clustering_result)
+
+nmi = normalized_mutual_info_score(true_labels, clustering_result)
+print(nmi)
 
 # For comparison NMI with a random clustering will give much lower score.
+random_labels = np.random.randint(low=0, high=4, size=true_labels.shape)
+nmi_random = normalized_mutual_info_score(true_labels, random_labels)
+print(nmi_random)
 
 # And for perfect match it returns 1.
+nmi_perfect = normalized_mutual_info_score(true_labels, true_labels)
+print(nmi_perfect)
+# -
 
 
+# So, the result is better than random, but is not so good.
+#
+# Maybe, because clusters are not mutually exclusive (some "food" photos have backround and some "inside" photos can have food on them) ? 
 
 # +
 # How well can we recover photo labels using a supervised algorithm?
