@@ -162,3 +162,8 @@ fabric.properties
 /.idea/misc.xml
 /dataset/
 /photos/
+.torch_home
+
+# Ignore .ipynb as it stores also resutls and just .py is enough.
+/explore.ipynb
+

@@ -1,5 +1,7 @@
 FROM pytorch/pytorch:1.1.0-cuda10.0-cudnn7.5-runtime
 
+ENV TORCH_HOME=/yelp-data-analysis/.torch_home
+
 WORKDIR /yelp-data-analysis
 
 #COPY . .
