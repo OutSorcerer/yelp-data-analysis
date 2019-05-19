@@ -1,0 +1,1 @@
+docker run --rm -p 8888:8888 -v $PWD:/yelp-data-analysis yelp-data-analysis
