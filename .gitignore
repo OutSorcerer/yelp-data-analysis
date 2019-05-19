@@ -160,3 +160,5 @@ fabric.properties
 
 ### Custome ignores
 /.idea/misc.xml
+/dataset/
+/photos/
