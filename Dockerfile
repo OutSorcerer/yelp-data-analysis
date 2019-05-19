@@ -6,4 +6,4 @@ WORKDIR /yelp-data-analysis
 
 RUN pip install numpy pandas jupyter jupytext pretrainedmodels
 
-CMD jupyter notebook --allow-root --ip 0.0.0.0 --port 8888 --NotebookApp.token=Sy3BMx14nrrYsR9LqzmVcbvHmcGnywyN
+CMD jupyter notebook --allow-root --ip 0.0.0.0 --port 8888 --NotebookApp.token=Sy3BMx14nrrYsR9LqzmVcbvHmcGnywyN --no-browser
