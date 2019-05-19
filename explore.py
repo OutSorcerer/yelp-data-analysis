@@ -26,13 +26,36 @@
 #
 # The implementation of Xception trained on ImageNet is available at https://github.com/Cadene/pretrained-models.pytorch.
 
-import pretrainedmodels
+from xception_with_pooling_features import xception_with_pooling_features
+xception_model = xception_with_pooling_features(num_classes=1000, pretrained='imagenet')
 
-xception_model = pretrainedmodels.__dict__['xception'](num_classes=1000, pretrained='imagenet')
+# +
+import torch
+import pretrainedmodels.utils as utils
 
-import os
+load_img = utils.LoadImage()
 
-os.environ["TORCH_MODEL_ZOO"] = "/yelp-data-analysis/.torch_model_zoo"
+# transformations depending on the model
+# rescale, center crop, normalize, and others (ex: ToBGR, ToRange255)
+tf_img = utils.TransformImage(xception_model) 
+
+#path_img = 'photos/photos/3-T7FTL_sB4mH2bc3WnPUg.jpg'
+path_img = 'photos/photos/3T449kzPrsipjBx7I8ENag.jpg'
+
+input_img = load_img(path_img)
+input_tensor = tf_img(input_img)         # 3x400x225 -> 3x299x299 size may differ
+input_tensor = input_tensor.unsqueeze(0) # 3x299x299 -> 1x3x299x299
+input = torch.autograd.Variable(input_tensor,
+    requires_grad=False)
+
+#output_logits = model(input) # 1x1000
+
+output_features = xception_model.features(input) # 1x14x14x2048 size may differ
+# -
+
+output_features.shape
+
+output_features
 
 
 
