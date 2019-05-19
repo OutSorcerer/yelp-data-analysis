@@ -1,0 +1,5 @@
+.git
+
+# Temporarily ignore dataset for faster iterations.
+/dataset/
+/photos/
