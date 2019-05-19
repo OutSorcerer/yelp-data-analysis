@@ -53,4 +53,4 @@ def load_photos_with_features_df():
 
 
 if __name__== "__main__":
-  extract()
+  load_photos_with_features_df()

@@ -34,24 +34,32 @@ import pandas as pd
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from sklearn.cluster import AgglomerativeClustering
+import seaborn as sns
+from sklearn.covariance import EllipticEnvelope
+from sklearn.decomposition import PCA
+from sklearn.metrics import normalized_mutual_info_score
 
 import feature_extractor
-import seaborn as sns
-# -
 
+# +
 # Extract deep features for every photo (it takes approximately 3 hours on my hardware) or load them from cache.
-photos_with_features_df = feature_extractor.load_photos_with_features_df()
+photos_with_features_df_full = feature_extractor.load_photos_with_features_df()
+
+# Use a random subsample of 2k photos, as 200k are too much to feed into t-SNE and visualize.
+photos_with_features_df = photos_with_features_df_full.sample(n=2000, random_state=42).reset_index()
+# -
 
 # Stack all features in a singe array of shape (num_photos, num_features)
 features_array = np.stack(photos_with_features_df.features.values, axis=0)
 
 # +
 # Let's apply t-SNE to visualize our features.
-# For each photo we know its label ('inside', 'food', 'outside', 'drink').
+# For each photo we know its label ('inside', 'food', 'outside', 'drink', 'menu').
 # Let's see how they are arranged after embedding feaures into 2d scape with t-SNE.
 # t-SNE has no information about labels, they are added just for visualization. 
 
-tsne_2d = TSNE(n_components=2, verbose=1, n_iter=300)
+tsne_2d = TSNE(n_components=2, verbose=1, n_iter=1000, perplexity=10, random_state=42)
 tsne_features_2d = tsne_2d.fit_transform(features_array)
 
 tsne_2d_df = pd.DataFrame()
@@ -63,27 +71,33 @@ plt.figure(figsize=(16,10))
 sns.scatterplot(
     x="tsne-2d-one", y="tsne-2d-two",
     hue="label",
-    palette=sns.xkcd_palette(["blue", "red", "green", "yellow"]),
+    palette=sns.xkcd_palette(["blue", "red", "green", "yellow", 'magenta']),
     data=tsne_2d_df,
     legend="full"    
 )
+# -
 
+
+# We see some clumps, that could, for example, correspond to certain types of food, like burgers or pizza, however [it is really easy to misinterpret t-SNE results](https://distill.pub/2016/misread-tsne/).
 
 # +
-# Now let's try to use 3d t-SNE instead of 2d.
+# Now let's try to visualize the results of 3d t-SNE.
 
-tsne_3d = TSNE(n_components=3, verbose=1, n_iter=400)
+tsne_3d = TSNE(n_components=3, verbose=1, n_iter=1000, perplexity=5, random_state=42)
 tsne_features_3d = tsne_3d.fit_transform(features_array)
 
-label_to_color = {'inside':'b',
-                  'food':'r',
-                  'outside':'g',
-                  'drink':'y'}
+label_to_color = {'inside':'blue',
+                  'food':'red',
+                  'outside':'green',
+                  'drink':'yellow',
+                  'menu': 'magenta',
+                 }
 
 inside_indices = photos_with_features_df[photos_with_features_df.label=='inside'].index
 food_indices = photos_with_features_df[photos_with_features_df.label=='food'].index
 outside_indices = photos_with_features_df[photos_with_features_df.label=='outside'].index
 drink_indices = photos_with_features_df[photos_with_features_df.label=='drink'].index
+menu_indices = photos_with_features_df[photos_with_features_df.label=='menu'].index
 
 ax = plt.figure(figsize=(16,10)).gca(projection='3d')
 
@@ -100,9 +114,34 @@ plot_label(inside_indices, 'inside')
 plot_label(food_indices, 'food')
 plot_label(outside_indices, 'outside')
 plot_label(drink_indices, 'drink')
+plot_label(menu_indices, 'menu')
     
 ax.set_xlabel('tsne-3d-one')
 ax.set_ylabel('tsne-3d-two')
 ax.set_zlabel('tsne-3d-three')
 plt.legend()
 plt.show()
+# -
+
+# Some labels are almost invisible now since they ended up somewhere inside the point cloud.
+
+# +
+# How well can we recover photo labels using an unsupervised algoritm?
+# Try to cluster everything into 5 clusters and then compute NMI score between known clusering of photos by labels.
+clustering_model = AgglomerativeClustering(n_clusters=5).fit(features_array)
+clustering_model.predict(features_array)
+#print(clustering_model)
+
+# For comparison NMI with a random clustering will give much lower score.
+
+# And for perfect match it returns 1.
+
+
+
+# +
+# How well can we recover photo labels using a supervised algorithm?
+
+
+# -
+
+
