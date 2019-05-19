@@ -1,5 +1,7 @@
 .git
 
-# Temporarily ignore dataset for faster iterations.
+# TODO: remove this to include these files in the final image.
+# Temporarily ignore dataset and pretrained model wright for faster iterations.
 /dataset/
 /photos/
+/.torch_home/
