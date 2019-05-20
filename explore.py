@@ -46,8 +46,14 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score, accuracy_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import average_precision_score
 
 import feature_extractor
+# -
+
+# Load businesses
+business_df = pd.read_json('dataset/business.json', lines=True)
 
 # +
 # Extract deep features for every photo (it takes approximately 3 hours on my hardware) or load them from cache.
@@ -187,11 +193,11 @@ classifier = Pipeline([
                                  class_weight='balanced', random_state=42))])
 
 # Classes are imbalanced, let's see their frequencies
+y_counts = np.bincount(y_train)
 y_frequencies = y_counts / np.sum(y_counts)
 print('class frequencies: {}'.format(y_frequencies))
 
 # As a baseline compute metrics for a trivial classifier that always outputs the most popular class.
-y_counts = np.bincount(y_train)
 most_frequent_y = np.full(shape=y_test.shape, fill_value=np.argmax(y_counts)) # Food
 print('Mean constant accuracy: {}'.format(accuracy_score(y_test, most_frequent_y)))
 print('Balanced mean constant accuracy: {}'.format(balanced_accuracy_score(y_test, most_frequent_y)))
@@ -216,12 +222,194 @@ print('Balanced mean test accuracy: {}'.format(balanced_accuracy_score(y_test, y
 
 # Even though there is overfitting, metrics are much better comparing to constant and random predictions.
 
-# +
-# What about NMI of a supervised algorithm vs. real labels?
+# ### What about NMI of a supervised algorithm vs. real labels?
 
 nmi_supervised = normalized_mutual_info_score(y_test, y_test_pred, average_method='arithmetic')
 print('supervised NMI={}'.format(nmi_supervised))
 
-# -
 
 # NMI with a supervised algorithm is much better.
+
+# ## How well can we recover business attributes by its photo features?
+
+# ### Let's take GoodForKids as an example
+
+# +
+# Get good_for_kids feature for all businesses and add it into business_df
+good_for_kids = business_df.attributes.apply(lambda json: json['GoodForKids'] == 'True' if json is not None and 'GoodForKids' in json else None)
+business_df['good_for_kids'] = good_for_kids
+
+print('good_for_kids stats by business:')
+good_for_kids.value_counts(dropna=False)
+
+# +
+# Let's merge photos data frame with businesses data frame, 
+# but only for businesses where we exactly know if they are good for kids.
+business_is_good_for_kids_df = business_df[['business_id', 'good_for_kids']]
+business_is_good_for_kids_df = business_is_good_for_kids_df[~business_is_good_for_kids_df.good_for_kids.isnull()]
+photo_is_good_for_kids_df = pd.merge(left=photos_with_features_df_full, right=business_is_good_for_kids_df, how='inner', on='business_id')
+print('good_for_kids stats by photo:')
+print(photo_is_good_for_kids_df.good_for_kids.value_counts(dropna=False))
+
+# Sample 20k of examples and get Xs and ys.
+photo_is_good_for_kids_df = photo_is_good_for_kids_df.sample(n=20000, random_state=42).reset_index()
+photo_is_good_for_kids_features = np.stack(photo_is_good_for_kids_df.features.values, axis=0)
+photo_is_good_for_kids_y = photo_is_good_for_kids_df.good_for_kids.values.astype(np.bool)
+photo_is_good_for_kids_y_business_id = photo_is_good_for_kids_df.business_id.values
+# -
+
+# Even though most businesses are not good for kids, most photos belong to places that are good for kids.
+
+# Split good_for_kids data into train and test datasets for validation.
+X_kids_train, X_kids_test, y_kids_train, y_kids_test, business_id_train, business_id_test = train_test_split(photo_is_good_for_kids_features, photo_is_good_for_kids_y, photo_is_good_for_kids_y_business_id, test_size=0.2, random_state=42)
+
+# +
+classifier_kids = Pipeline([
+    ('scaler', StandardScaler()),
+    ('logit', LogisticRegression(solver='lbfgs', C=0.0001, verbose=0, max_iter=2000, 
+                                class_weight='balanced', random_state=42))    
+    ])
+
+# What percentage of photos belong to businesses that are good for kids?
+y_kids_counts = np.bincount(y_kids_train)
+y_kids_frequencies = y_kids_counts / np.sum(y_kids_counts)
+print('class frequencies: {}'.format(y_kids_frequencies))
+
+# As a baseline compute metrics for a trivial classifier that always outputs the most popular class.
+most_frequent_y_kids = np.full(shape=y_kids_test.shape, fill_value=bool(np.argmax(y_kids_counts)))
+print('Mean constant accuracy: {}'.format(accuracy_score(y_kids_test, most_frequent_y_kids)))
+print('Balanced mean constant accuracy: {}'.format(balanced_accuracy_score(y_kids_test, most_frequent_y_kids)))
+
+# and for a classifier that outputs a random class.
+np.random.seed(42)
+random_y_kids = np.random.choice([False, True], size=y_kids_test.shape, p=y_kids_frequencies)
+print('Mean random accuracy: {}'.format(accuracy_score(y_kids_test, random_y_kids)))
+print('Balanced mean random accuracy: {}'.format(balanced_accuracy_score(y_kids_test, random_y_kids)))
+
+classifier_kids = classifier_kids.fit(X_kids_train, y_kids_train)
+y_kids_train_pred = classifier_kids.predict(X_kids_train)
+print('Mean train accuracy: {}'.format(accuracy_score(y_kids_train, y_kids_train_pred)))
+print('Balanced mean train accuracy: {}'.format(balanced_accuracy_score(y_kids_train, y_kids_train_pred)))
+
+y_kids_test_pred = classifier_kids.predict(X_kids_test)
+y_kids_test_pred_proba = classifier_kids.predict_proba(X_kids_test)[:, 1]
+print('Mean test accuracy: {}'.format(accuracy_score(y_kids_test, y_kids_test_pred)))
+print('Balanced mean test accuracy: {}'.format(balanced_accuracy_score(y_kids_test, y_kids_test_pred)))
+print('Test average precision: {}'.format(average_precision_score(y_kids_test, y_kids_test_pred_proba)))
+# -
+
+# So, given a photo we can try to predict if a photo belongs to a business that is good for kids,
+# but with a quality that is far from perfect (even though balanced accuracy is better that constant prediction, unbalanced accuracy is even worse than constant prediction).
+
+# #### What if we aggregate predictions for all photos that belong to the same business?
+
+# +
+# Real good_for_kids values aggregated by business
+business_photo_good_for_kids_test = pd.DataFrame()
+business_photo_good_for_kids_test['business_id'] = business_id_test
+business_photo_good_for_kids_test['good_for_kids'] = y_kids_test
+business_good_for_kids_test = business_photo_good_for_kids_test.groupby('business_id').agg({'good_for_kids':'mean'})
+
+# Predicted good_for_kids values aggregated by business
+business_photo_good_for_kids_test_pred = pd.DataFrame()
+business_photo_good_for_kids_test_pred['business_id'] = business_id_test
+business_photo_good_for_kids_test_pred['good_for_kids'] = y_kids_test_pred
+business_good_for_kids_test_pred = business_photo_good_for_kids_test_pred.groupby('business_id').agg({'good_for_kids':'mean'})
+business_good_for_kids_test_pred['good_for_kids'] = business_good_for_kids_test_pred['good_for_kids'] > 0.5
+
+# What percentage of businesses are good for kids?
+y_businesses_counts = np.bincount(business_good_for_kids_test.good_for_kids.values)
+y_businesses_frequencies = y_businesses_counts / np.sum(y_businesses_counts)
+print('class frequencies: {}'.format(y_businesses_frequencies))
+
+# As a baseline compute metrics for a trivial classifier that always outputs the most popular class.
+most_frequent_y_businesses = np.full(shape=business_good_for_kids_test.good_for_kids.values.shape,
+                                     fill_value=bool(np.argmax(y_businesses_frequencies)))
+print('Mean constant accuracy: {}'.format(accuracy_score(business_good_for_kids_test.good_for_kids.values,
+                                                         most_frequent_y_businesses)))
+print('Balanced mean constant accuracy: {}'.format(balanced_accuracy_score(business_good_for_kids_test.good_for_kids.values,
+                                                                           most_frequent_y_businesses)))
+
+# What is the actual metric?
+
+print('Mean test accuracy by business: {}'.format(
+    accuracy_score(business_good_for_kids_test.good_for_kids.values,
+                   business_good_for_kids_test_pred.good_for_kids.values)))
+print('Balanced mean test accuracy by business: {}'.format(
+    balanced_accuracy_score(business_good_for_kids_test.good_for_kids.values,
+                            business_good_for_kids_test_pred.good_for_kids.values)))
+# -
+
+# Balanced accuracy is still better than constant guessing, but unbalnced accuracy is still worse.
+
+# ### Let's finally take is_restaurant as an example
+# We should expect better metrics than for `good_for_kids` as food is directly visible on photos.
+
+# +
+# Get is_restaurant feature for all businesses and add it into business_df
+is_restaurant = business_df.categories.apply(lambda categories: 'Restaurants' in categories if categories else None)
+business_df['is_restaurant'] = is_restaurant
+
+print('is_restaurant stats by business:')
+is_restaurant.value_counts(dropna=False)
+
+# +
+# Let's merge photos data frame with businesses data frame, 
+# but only for businesses where we exactly know if they are restaurants or not.
+business_is_restaurant_df = business_df[['business_id', 'is_restaurant']]
+business_is_restaurant_df = business_is_restaurant_df[~business_is_restaurant_df.is_restaurant.isnull()]
+photo_is_restaurant_df = pd.merge(left=photos_with_features_df_full, right=business_is_restaurant_df, how='inner', on='business_id')
+print('is_restaurant stats by photo:')
+print(photo_is_restaurant_df.is_restaurant.value_counts(dropna=False))
+
+# Sample 20k of examples and get Xs and ys.
+photo_is_restaurant_df = photo_is_restaurant_df.sample(n=20000, random_state=42).reset_index()
+photo_is_restaurant_features = np.stack(photo_is_restaurant_df.features.values, axis=0)
+photo_is_restaurant_y = photo_is_restaurant_df.is_restaurant.values.astype(np.bool)
+#photo_is_restaurant_y_business_id = photo_is_good_for_kids_df.business_id.values
+# -
+
+# Even though most businesses are not restaurants, most photos belong to restaurants.
+
+# Split is_restaurant data into train and test datasets for validation.
+X_restaurants_train, X_restaurants_test, y_restaurants_train, y_restaurants_test = train_test_split(photo_is_restaurant_features, photo_is_restaurant_y, test_size=0.2, random_state=42)
+
+# +
+classifier_restaurants = Pipeline([
+    ('scaler', StandardScaler()),
+    ('logit', LogisticRegression(solver='lbfgs', C=0.00001, verbose=0, max_iter=2000, 
+                                class_weight='balanced', random_state=42))    
+    ])
+
+# What percentage of photos belong to restaurants?
+y_restaurants_counts = np.bincount(y_restaurants_train)
+y_restaurants_frequencies = y_restaurants_counts / np.sum(y_restaurants_counts)
+print('class frequencies: {}'.format(y_restaurants_frequencies))
+
+# As a baseline compute metrics for a trivial classifier that always outputs the most popular class.
+most_frequent_y_restaurants = np.full(shape=y_restaurants_test.shape, fill_value=bool(np.argmax(y_restaurants_frequencies)))
+print('Mean constant accuracy: {}'.format(accuracy_score(y_restaurants_test, most_frequent_y_restaurants)))
+print('Balanced mean constant accuracy: {}'.format(balanced_accuracy_score(y_restaurants_test, most_frequent_y_restaurants)))
+
+# and for a classifier that outputs a random class.
+np.random.seed(42)
+random_y_restaurants = np.random.choice([False, True], size=y_restaurants_test.shape, p=y_restaurants_frequencies)
+print('Mean random accuracy: {}'.format(accuracy_score(y_restaurants_test, random_y_restaurants)))
+print('Balanced mean random accuracy: {}'.format(balanced_accuracy_score(y_restaurants_test, random_y_restaurants)))
+
+classifier_restaurants = classifier_restaurants.fit(X_restaurants_train, y_restaurants_train)
+y_restaurants_train_pred = classifier_restaurants.predict(X_restaurants_train)
+print('Mean train accuracy: {}'.format(accuracy_score(y_restaurants_train, y_restaurants_train_pred)))
+print('Balanced mean train accuracy: {}'.format(balanced_accuracy_score(y_restaurants_train, y_restaurants_train_pred)))
+
+y_restaurants_test_pred = classifier_restaurants.predict(X_restaurants_test)
+y_restaurants_test_pred_proba = classifier_restaurants.predict_proba(X_restaurants_test)[:, 1]
+print('Mean test accuracy: {}'.format(accuracy_score(y_restaurants_test, y_restaurants_test_pred)))
+print('Balanced mean test accuracy: {}'.format(balanced_accuracy_score(y_restaurants_test, y_restaurants_test_pred)))
+print('Test average precision: {}'.format(average_precision_score(y_restaurants_test, y_restaurants_test_pred_proba)))
+
+# -
+
+# As we expected, deep photo features better predict if a place is a restaraunt comparing to if a place is good for kids (both in  terms of balanced accuracy and average precision).
+
+
