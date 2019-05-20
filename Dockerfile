@@ -5,7 +5,7 @@ ENV TORCH_HOME=/yelp-data-analysis/.torch_home
 WORKDIR /yelp-data-analysis
 
 # TODO: uncomment this before building the final image.
-#COPY . .
+COPY . .
 
 RUN pip install numpy pandas jupyter jupytext pretrainedmodels scikit-learn matplotlib seaborn
 
