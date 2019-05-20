@@ -18,7 +18,7 @@
 #  
 # Working with raw image data is infeasible, not only because its total approximate size is `200k*400*400*3 ≈ 100GB`.
 #
-# Also, direct pixel values are not very useful as features as photos of same objects can be quite far away in RGB space.
+# Also, direct pixel values are not very useful as features of photos of same objects can be quite far away in RGB space.
 #
 # So, let us use deep features.
 #
