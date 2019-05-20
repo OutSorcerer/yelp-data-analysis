@@ -27,6 +27,7 @@ to immediately see changes there without rebuilding the container.
 
 # How to rebuild Docker image 
 
-* Clone the repo
-* Manually put `dataset` and `photos` folders downloaded from [the Yelp Open Dataset page](https://www.yelp.com/dataset/) in the root of the repo
-* Run `build.sh` 
+* Clone the repo.
+* Manually put `dataset` and `photos` folders downloaded from [the Yelp Open Dataset page](https://www.yelp.com/dataset/) in the root of the repo.
+* Run `feature_extractor.py`. That will download Xception model weights and extract deep features for every image.
+* Run `build.sh` to build the Docker image. 
