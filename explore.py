@@ -154,10 +154,10 @@ plt.show()
 
 # Some labels are almost invisible now since they ended up somewhere inside the point cloud.
 
-# ## How well can we recover photo labels using an unsupervised algoritm?
+# ## How well can we recover photo labels using an unsupervised algorithm?
 
 # +
-# Try to cluster everything into 5 clusters and then compute NMI score between known clusering of photos by labels.
+# Try to cluster everything into 5 clusters and then compute NMI score between known clustering of photos by labels.
 print('True labels:       {}'.format(true_labels))
 
 clustering_result = AgglomerativeClustering(n_clusters=5).fit_predict(features_array)
@@ -342,7 +342,7 @@ print('Balanced mean test accuracy by business: {}'.format(
 
 # Balanced accuracy is still better than constant guessing, but unbalnced accuracy is still worse.
 
-# ### Let's finally take is_restaurant as an example
+# ### Let's finally take is_restaurant as an another example
 # We should expect better metrics than for `good_for_kids` as food is directly visible on photos.
 
 # +
