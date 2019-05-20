@@ -1,7 +1,8 @@
 # How to run 
 
 Uses image from Docker Hub.
-Image contains the entire dataset, prentrained CNN weights and photo features for full reproducibility.
+Image contains the entire dataset, prentrained CNN weights, deep photo features and
+Jupyter notebook outputs for full reproducibility.
 
 ```
 docker run --rm -p 8888:8888 sourcerer/yelp-data-analysis
